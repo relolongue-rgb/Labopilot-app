@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LaboPilot</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@600&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<style>
+:root{--ink:#12303a;--mute:#5d7480;--paper:#f2f6f5;--card:#fff;--line:#d5e0de;--brand:#0e7a6b;--brand-d:#0a5a4f;--warn:#b86e00;--bad:#b3261e;color-scheme:light}
+*{box-sizing:border-box}
+body{margin:0;font:16px/1.5 "IBM Plex Sans",system-ui,sans-serif;color:var(--ink);background:var(--paper)}
+h1,h2{font-family:"IBM Plex Serif",Georgia,serif;margin:0}
+button,input,select{font:inherit}
+.wrap{max-width:880px;margin:0 auto;padding:16px}
+header{background:var(--ink);color:#fff}
+header .wrap{display:flex;align-items:center;justify-content:space-between;gap:12px}
+header h1{font-size:1.25rem}
+header small{color:#a9c4cc;display:block;font-size:.8rem}
+.link{background:none;border:1px solid #4d6b75;color:#fff;border-radius:6px;padding:6px 12px;cursor:pointer}
+nav{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:16px;overflow-x:auto}
+nav button{background:none;border:0;border-bottom:3px solid transparent;padding:12px 14px;cursor:pointer;color:var(--mute);font-weight:500;white-space:nowrap}
+nav button[aria-selected=true]{color:var(--brand-d);border-color:var(--brand)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:16px}
+form.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;align-items:end}
+label{display:block;font-size:.85rem;color:var(--mute);font-weight:500}
+input,select{width:100%;padding:10px;border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--ink);margin-top:4px}
+:focus-visible{outline:3px solid #7cc9bd;outline-offset:1px}
+.btn{background:var(--brand);color:#fff;border:0;border-radius:6px;padding:11px 16px;cursor:pointer;font-weight:600}
+.btn:hover{background:var(--brand-d)}
+.btn.sec{background:#e4eeec;color:var(--brand-d)}
+.row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--line);flex-wrap:wrap}
+.row:first-child{border-top:0}
+.qty{font-family:"IBM Plex Serif",serif;font-size:1.3rem}
+.tag{font-size:.8rem;font-weight:600}
+.ok{color:var(--brand-d)}.soon{color:var(--warn)}.late{color:var(--bad)}
+.mute{color:var(--mute);font-size:.9rem}
+.msg{margin:12px 0 0;font-size:.9rem;color:var(--bad)}.msg.good{color:var(--brand-d)}
+.empty{color:var(--mute);padding:8px 0}
+#auth{max-width:440px;margin:6vh auto;padding:0 16px}
+#auth h1{font-size:2rem;margin-bottom:4px}
+#auth form{display:grid;gap:12px;margin-top:12px}
+dialog{border:1px solid var(--line);border-radius:10px;padding:20px;width:min(92vw,380px)}
+dialog::backdrop{background:rgba(18,48,58,.45)}
+.hide{display:none!important}
+</style>
+</head>
+<body>
+
+<section id="auth" class="hide">
+  <h1>LaboPilot</h1>
+  <p class="mute">Le stock de réactifs de votre laboratoire, toujours à jour.</p>
+  <div class="card">
+    <nav role="tablist">
+      <button type="button" role="tab" id="t-in" aria-selected="true">Se connecter</button>
+      <button type="button" role="tab" id="t-up" aria-selected="false">Créer un laboratoire</button>
+    </nav>
+    <form id="f-in">
+      <label>Adresse e-mail<input type="email" name="email" required autocomplete="email"></label>
+      <label>Mot de passe<input type="password" name="password" required autocomplete="current-password"></label>
+      <button class="btn">Se connecter</button>
+    </form>
+    <form id="f-up" class="hide">
+      <label>Nom du laboratoire<input name="labo" required></label>
+      <label>Ville<input name="ville"></label>
+      <label>Pays<input name="pays"></label>
+      <label>Votre nom<input name="nom" required></label>
+      <label>Adresse e-mail<input type="email" name="email" required autocomplete="email"></label>
+      <label>Mot de passe (6 caractères minimum)<input type="password" name="password" minlength="6" required autocomplete="new-password"></label>
+      <button class="btn">Créer le laboratoire</button>
+    </form>
+    <p id="authmsg" class="msg" role="alert"></p>
+  </div>
+</section>
+
+<div id="app" class="hide">
+  <header><div class="wrap">
+    <div><h1>LaboPilot</h1><small id="laboname"></small></div>
+    <button class="link" id="logout">Se déconnecter</button>
+  </div></header>
+  <main class="wrap">
+    <nav role="tablist" id="tabs">
+      <button role="tab" data-v="stock" aria-selected="true">Stock</button>
+      <button role="tab" data-v="reactifs" aria-selected="false">Réactifs</button>
+      <button role="tab" data-v="mouv" aria-selected="false">Mouvements</button>
+    </nav>
+
+    <section id="v-stock">
+      <div class="card">
+        <h2>Ajouter un lot</h2>
+        <form id="f-lot" class="grid">
+          <label>Réactif<select name="reactif_id" id="sel-reactif" required></select></label>
+          <label>Numéro de lot<input name="numero_lot" required></label>
+          <label>Date de péremption<input type="date" name="date_peremption" required></label>
+          <label>Quantité reçue<input type="number" name="quantite" min="0" step="any" required></label>
+          <button class="btn">Ajouter le lot</button>
+        </form>
+        <p id="m-lot" class="msg" role="alert"></p>
+      </div>
+      <div class="card"><h2>Stock actuel</h2><div id="list-stock"></div></div>
+    </section>
+
+    <section id="v-reactifs" class="hide">
+      <div class="card">
+        <h2>Ajouter un réactif</h2>
+        <form id="f-reactif" class="grid">
+          <label>Nom<input name="nom" required></label>
+          <label>Référence<input name="reference"></label>
+          <label>Fournisseur<input name="fournisseur"></label>
+          <label>Unité (boîte, flacon, mL…)<input name="unite" required></label>
+          <button class="btn">Ajouter le réactif</button>
+        </form>
+        <p id="m-reactif" class="msg" role="alert"></p>
+      </div>
+      <div class="card"><h2>Réactifs du laboratoire</h2><div id="list-reactifs"></div></div>
+    </section>
+
+    <section id="v-mouv" class="hide">
+      <div class="card"><h2>Derniers mouvements</h2><div id="list-mouv"></div></div>
+    </section>
+  </main>
+</div>
+
+<dialog id="dlg">
+  <form id="f-mouv" method="dialog" style="display:grid;gap:12px">
+    <h2 id="dlg-title">Mouvement de stock</h2>
+    <p class="mute" id="dlg-info"></p>
+    <label>Type<select name="type"><option value="sortie">Sortie (utilisation)</option><option value="entree">Entrée (réception)</option></select></label>
+    <label>Quantité<input type="number" name="quantite" min="0" step="any" required></label>
+    <label>Motif<input name="motif" placeholder="Ex. : série du matin"></label>
+    <p id="m-mouv" class="msg" role="alert"></p>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button type="button" class="btn sec" id="dlg-cancel">Annuler</button>
+      <button class="btn">Enregistrer</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+const sb = supabase.createClient("https://vpzjsbjkxdbysxydfhhg.supabase.co", "sb_publishable_48fG5PAvN5kjODi4_SKtaA_Q0SbmbtV");
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const S = { user:null, profil:null, reactifs:[], lots:[], mouv:[], lotActif:null };
+
+function note(sel, text, good){ const e=$(sel); e.textContent=text||""; e.className="msg"+(good?" good":""); }
+function erreur(m){
+  if(/Invalid login/i.test(m)) return "E-mail ou mot de passe incorrect.";
+  if(/already registered/i.test(m)) return "Cet e-mail a déjà un compte. Utilisez « Se connecter ».";
+  if(/Email not confirmed/i.test(m)) return "Confirmez d’abord votre e-mail (lien reçu par message).";
+  return m;
+}
+function montrer(ecran){ $("#auth").classList.toggle("hide", ecran!=="auth"); $("#app").classList.toggle("hide", ecran!=="app"); }
+
+/* ---------- Connexion / inscription ---------- */
+$("#t-in").onclick = () => bascule(true);
+$("#t-up").onclick = () => bascule(false);
+function bascule(connexion){
+  $("#f-in").classList.toggle("hide", !connexion); $("#f-up").classList.toggle("hide", connexion);
+  $("#t-in").setAttribute("aria-selected", connexion); $("#t-up").setAttribute("aria-selected", !connexion);
+  note("#authmsg","");
+}
+$("#f-in").onsubmit = async e => {
+  e.preventDefault(); const v = Object.fromEntries(new FormData(e.target));
+  const { error } = await sb.auth.signInWithPassword({ email:v.email, password:v.password });
+  if(error) return note("#authmsg", erreur(error.message));
+  demarrer();
+};
+$("#f-up").onsubmit = async e => {
+  e.preventDefault(); const v = Object.fromEntries(new FormData(e.target));
+  const { data, error } = await sb.auth.signUp({ email:v.email, password:v.password });
+  if(error) return note("#authmsg", erreur(error.message));
+  try { localStorage.setItem("lp_pending", JSON.stringify({ email:v.email, labo:v.labo, ville:v.ville, pays:v.pays, nom:v.nom })); } catch(_){}
+  if(data.session) demarrer();
+  else { bascule(true); note("#authmsg", "Compte créé. Confirmez votre e-mail avec le lien reçu, puis connectez-vous.", true); }
+};
+$("#logout").onclick = async () => { await sb.auth.signOut(); montrer("auth"); };
+
+/* ---------- Démarrage ---------- */
+async function demarrer(retry){
+  const { data:{ session } } = await sb.auth.getSession();
+  if(!session) return montrer("auth");
+  S.user = session.user;
+  let { data:p } = await sb.from("profils").select("*").eq("id", S.user.id).maybeSingle();
+  if(!p && !retry){
+    let pend = null; try { pend = JSON.parse(localStorage.getItem("lp_pending")||"null"); } catch(_){}
+    if(pend && pend.email === S.user.email){
+      const { error } = await sb.rpc("creer_laboratoire", { p_nom:pend.labo, p_ville:pend.ville, p_pays:pend.pays, p_nom_user:pend.nom });
+      if(!error){ try { localStorage.removeItem("lp_pending"); } catch(_){} return demarrer(true); }
+      await sb.auth.signOut(); montrer("auth"); return note("#authmsg", "Le laboratoire n’a pas pu être créé : " + error.message);
+    }
+  }
+  if(!p){ await sb.auth.signOut(); montrer("auth"); return note("#authmsg", "Ce compte n’a pas de laboratoire. Créez-en un."); }
+  S.profil = p;
+  const { data:l } = await sb.from("laboratoires").select("nom,ville").eq("id", p.laboratoire_id).maybeSingle();
+  $("#laboname").textContent = l ? l.nom + (l.ville ? " — " + l.ville : "") : "";
+  montrer("app"); await charger();
+}
+
+async function charger(){
+  const [r, l, m] = await Promise.all([
+    sb.from("reactifs").select("*").order("nom"),
+    sb.from("lots").select("*").order("date_peremption"),
+    sb.from("mouvements").select("*").order("created_at", { ascending:false })
+  ]);
+  S.reactifs = r.data || []; S.lots = l.data || []; S.mouv = m.data || [];
+  dessiner();
+}
+
+/* ---------- Affichage ---------- */
+function reactifDe(id){ return S.reactifs.find(r => r.id === id) || { nom:"?", unite:"" }; }
+function restant(lot){
+  return S.mouv.filter(x => x.lot_id === lot.id).reduce((t, x) => t + (x.type === "entree" ? 1 : -1) * Number(x.quantite), Number(lot.quantite_recue));
+}
+function peremption(d){
+  if(!d) return "";
+  const jours = Math.ceil((new Date(d) - new Date().setHours(0,0,0,0)) / 86400000);
+  const date = new Date(d).toLocaleDateString("fr-FR");
+  if(jours < 0) return `<span class="tag late">Périmé depuis le ${date}</span>`;
+  if(jours <= 30) return `<span class="tag soon">Expire le ${date} (${jours} j)</span>`;
+  return `<span class="tag ok">Expire le ${date}</span>`;
+}
+function dessiner(){
+  $("#sel-reactif").innerHTML = S.reactifs.length
+    ? S.reactifs.map(r => `<option value="${r.id}">${esc(r.nom)}</option>`).join("")
+    : `<option value="">Ajoutez d’abord un réactif</option>`;
+  $("#list-stock").innerHTML = S.lots.length ? S.lots.map(l => {
+    const r = reactifDe(l.reactif_id);
+    return `<div class="row"><div><strong>${esc(r.nom)}</strong><div class="mute">Lot ${esc(l.numero_lot)}</div>${peremption(l.date_peremption)}</div>
+      <div style="text-align:right"><div class="qty">${restant(l)} <span class="mute">${esc(r.unite)}</span></div>
+      <button class="btn sec" data-lot="${l.id}">Mouvement</button></div></div>`;
+  }).join("") : `<p class="empty">Aucun lot en stock. Ajoutez votre premier lot ci-dessus.</p>`;
+  $("#list-reactifs").innerHTML = S.reactifs.length ? S.reactifs.map(r =>
+    `<div class="row"><div><strong>${esc(r.nom)}</strong><div class="mute">${esc(r.reference||"Sans référence")} · ${esc(r.fournisseur||"Fournisseur non précisé")}</div></div><span class="mute">${esc(r.unite)}</span></div>`
+  ).join("") : `<p class="empty">Aucun réactif. Ajoutez-en un avec le formulaire ci-dessus.</p>`;
+  $("#list-mouv").innerHTML = S.mouv.length ? S.mouv.slice(0,50).map(x => {
+    const l = S.lots.find(z => z.id === x.lot_id), r = l ? reactifDe(l.reactif_id) : { nom:"?", unite:"" };
+    const sortie = x.type === "sortie";
+    return `<div class="row"><div><strong>${esc(r.nom)}</strong><div class="mute">${new Date(x.created_at).toLocaleString("fr-FR")}${x.motif ? " — " + esc(x.motif) : ""}</div></div>
+      <span class="tag ${sortie ? "late" : "ok"}">${sortie ? "−" : "+"}${Number(x.quantite)} ${esc(r.unite)}</span></div>`;
+  }).join("") : `<p class="empty">Aucun mouvement enregistré.</p>`;
+}
+
+/* ---------- Onglets ---------- */
+$("#tabs").onclick = e => {
+  const b = e.target.closest("button[data-v]"); if(!b) return;
+  document.querySelectorAll("#tabs button").forEach(x => x.setAttribute("aria-selected", x === b));
+  ["stock","reactifs","mouv"].forEach(v => $("#v-"+v).classList.toggle("hide", v !== b.dataset.v));
+};
+
+/* ---------- Actions ---------- */
+$("#f-reactif").onsubmit = async e => {
+  e.preventDefault(); const v = Object.fromEntries(new FormData(e.target));
+  const { error } = await sb.from("reactifs").insert({ laboratoire_id:S.profil.laboratoire_id, nom:v.nom, reference:v.reference||null, fournisseur:v.fournisseur||null, unite:v.unite });
+  if(error) return note("#m-reactif", error.message);
+  e.target.reset(); note("#m-reactif","Réactif ajouté.",true); charger();
+};
+$("#f-lot").onsubmit = async e => {
+  e.preventDefault(); const v = Object.fromEntries(new FormData(e.target));
+  if(!v.reactif_id) return note("#m-lot","Ajoutez d’abord un réactif dans l’onglet Réactifs.");
+  const { error } = await sb.from("lots").insert({ laboratoire_id:S.profil.laboratoire_id, reactif_id:v.reactif_id, numero_lot:v.numero_lot, date_peremption:v.date_peremption, quantite_recue:Number(v.quantite) });
+  if(error) return note("#m-lot", error.message);
+  e.target.reset(); note("#m-lot","Lot ajouté.",true); charger();
+};
+$("#list-stock").onclick = e => {
+  const b = e.target.closest("button[data-lot]"); if(!b) return;
+  S.lotActif = S.lots.find(l => l.id === b.dataset.lot); const r = reactifDe(S.lotActif.reactif_id);
+  $("#dlg-info").textContent = `${r.nom} — lot ${S.lotActif.numero_lot} — en stock : ${restant(S.lotActif)} ${r.unite}`;
+  note("#m-mouv",""); $("#f-mouv").reset(); $("#dlg").showModal();
+};
+$("#dlg-cancel").onclick = () => $("#dlg").close();
+$("#f-mouv").onsubmit = async e => {
+  e.preventDefault(); const v = Object.fromEntries(new FormData(e.target)), q = Number(v.quantite);
+  if(v.type === "sortie" && q > restant(S.lotActif)) return note("#m-mouv","Quantité supérieure au stock disponible.");
+  const { error } = await sb.from("mouvements").insert({ laboratoire_id:S.profil.laboratoire_id, lot_id:S.lotActif.id, type:v.type, quantite:q, motif:v.motif||null, user_id:S.user.id });
+  if(error) return note("#m-mouv", error.message);
+  $("#dlg").close(); charger();
+};
+
+demarrer();
+</script>
+</body>
+</html>
